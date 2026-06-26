@@ -6,12 +6,27 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "ui_analyze"
 require "optparse"
 
+require "time"
+
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: ui-analyze [options] <path-to-support-dump>"
   opts.separator ""
   opts.separator "The path can be a directory or a .tar.gz support tarball."
   opts.separator ""
+  opts.on("--from DATE", "Only show boots on or after DATE (YYYY-MM-DD)") do |v|
+    options[:from] = Time.parse(v)
+  rescue ArgumentError
+    warn "Error: invalid --from date '#{v}' (expected YYYY-MM-DD)"
+    exit 1
+  end
+  opts.on("--to DATE", "Only show boots on or before DATE (YYYY-MM-DD)") do |v|
+    # End of the given day
+    options[:to] = Time.parse(v) + 86_399
+  rescue ArgumentError
+    warn "Error: invalid --to date '#{v}' (expected YYYY-MM-DD)"
+    exit 1
+  end
   opts.on("-h", "--help", "Show this message") { puts opts; exit }
 end.parse!
 
@@ -27,4 +42,4 @@ unless File.exist?(path)
   exit 1
 end
 
-UiAnalyze::CLI.run(path)
+UiAnalyze::CLI.run(path, from: options[:from], to: options[:to])

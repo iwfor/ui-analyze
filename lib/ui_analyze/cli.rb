@@ -22,14 +22,14 @@ module UiAnalyze
     BOLD  = "\e[1m"
     DIM   = "\e[2m"
 
-    def self.run(path)
+    def self.run(path, from: nil, to: nil)
       dump = Dump.open(path)
       info = DeviceInfo.new(dump)
       hist = BootHistory.new(dump)
 
       print_device_info(info)
       puts
-      print_boot_history(hist)
+      print_boot_history(hist, from: from, to: to)
     ensure
       dump&.cleanup
     end
@@ -63,15 +63,29 @@ module UiAnalyze
       row "Manufactured",   info.mfg_week
     end
 
-    def self.print_boot_history(hist)
+    def self.print_boot_history(hist, from: nil, to: nil)
       section "Boot History"
 
-      boots = hist.boots
-      total = hist.total
+      all_boots = hist.boots
+      boots = all_boots.select do |b|
+        (from.nil? || b.timestamp >= from) &&
+          (to.nil?   || b.timestamp <= to)
+      end
 
-      improper = hist.improper_count
-      upgrades = hist.firmware_upgrades.length
-      puts "  #{BOLD}#{total} boots total#{RESET} — " \
+      total    = all_boots.length
+      filtered = boots.length
+      improper = boots.count { |b| b.reason == :improper }
+      upgrades = boots.count { |b| b.reason == :firmware_upgrade }
+
+      if from || to
+        range_parts = []
+        range_parts << "from #{from.strftime("%Y-%m-%d")}" if from
+        range_parts << "to #{to.strftime("%Y-%m-%d")}" if to
+        puts "  #{DIM}Showing #{filtered} of #{total} boots (#{range_parts.join(" ")})#{RESET}"
+        puts
+      end
+
+      puts "  #{BOLD}#{filtered} boots#{from || to ? "" : " total"}#{RESET} — " \
            "#{color(:improper)}#{improper} improper shutdowns#{RESET}, " \
            "#{color(:firmware_upgrade)}#{upgrades} firmware upgrades#{RESET}"
       puts
@@ -96,10 +110,10 @@ module UiAnalyze
       end
 
       puts
-      print_reboot_rate_by_firmware(hist)
+      print_reboot_rate_by_firmware(boots)
     end
 
-    def self.print_reboot_rate_by_firmware(hist)
+    def self.print_reboot_rate_by_firmware(boots)
       section "Reboot Rate by Firmware"
 
       # Group improper shutdowns between each firmware upgrade
@@ -108,7 +122,7 @@ module UiAnalyze
       current_from = nil
       improper_count = 0
 
-      hist.boots.each do |b|
+      boots.each do |b|
         if b.reason == :firmware_upgrade
           groups << { fw: current_fw, from: current_from, to: b.timestamp, count: improper_count } if current_fw
           current_fw     = b.firmware || "unknown"
@@ -121,7 +135,7 @@ module UiAnalyze
         end
       end
       # Final group (current firmware)
-      last_boot = hist.boots.last
+      last_boot = boots.last
       groups << { fw: current_fw || "unknown", from: current_from, to: last_boot&.timestamp, count: improper_count }
 
       puts "  #{DIM}#{"Firmware".ljust(28)}  #{"Days active".rjust(11)}  " \
