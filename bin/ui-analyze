@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "ui_analyze"
+require "optparse"
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: ui-analyze [options] <path-to-support-dump>"
+  opts.separator ""
+  opts.separator "The path can be a directory or a .tar.gz support tarball."
+  opts.separator ""
+  opts.on("-h", "--help", "Show this message") { puts opts; exit }
+end.parse!
+
+path = ARGV[0]
+if path.nil? || path.empty?
+  warn "Error: path to support dump is required"
+  warn "Usage: ui-analyze <path-to-support-dump>"
+  exit 1
+end
+
+unless File.exist?(path)
+  warn "Error: #{path} does not exist"
+  exit 1
+end
+
+UiAnalyze::CLI.run(path)
