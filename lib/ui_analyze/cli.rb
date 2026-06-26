@@ -25,9 +25,12 @@ module UiAnalyze
     def self.run(path, from: nil, to: nil)
       dump = Dump.open(path)
       info = DeviceInfo.new(dump)
+      disk = DiskInfo.new(dump)
       hist = BootHistory.new(dump)
 
       print_device_info(info)
+      puts
+      print_disk_info(disk)
       puts
       print_boot_history(hist, from: from, to: to)
     ensure
@@ -61,6 +64,59 @@ module UiAnalyze
       section "Firmware"
       row "Version",        info.firmware_version
       row "Manufactured",   info.mfg_week
+    end
+
+    def self.print_disk_info(disk)
+      section "Storage"
+
+      # Attached / bay disks with SMART data
+      if disk.attached_disks.any?
+        disk.attached_disks.each do |d|
+          label = d.slot ? "Bay #{d.slot} Disk" : "Attached Disk"
+          size  = (d.size_bytes&.> 0) ? "  #{bytes_human(d.size_bytes)}" : ""
+          puts "  #{BOLD}#{label}#{RESET}  #{d.model}#{size}"
+          row "  Serial",       d.serial
+          row "  Power-on hrs", d.power_on_hours&.to_s
+          row "  Temperature",  d.temperature_c ? "#{d.temperature_c}°C" : nil
+          row "  Health",       d.life_pct ? "#{d.life_pct}% remaining" : nil
+          row "  Bad sectors",  d.bad_sectors&.to_s
+          row "  Error log",    d.error_log_count ? "#{d.error_log_count} entries" : nil
+          puts
+        end
+      else
+        # Show slot inventory even if empty
+        slots = disk.storage_slots
+        if slots.any?
+          slots.each do |s|
+            status = s["status"] == "nodisk" ? "#{DIM}(empty)#{RESET}" : s["status"]
+            puts "  #{DIM}Bay #{s["slot"]}#{RESET}  #{status}"
+          end
+          puts
+        end
+      end
+
+      # System filesystems
+      if disk.filesystems.any?
+        puts "  #{DIM}#{"Filesystem".ljust(42)}  #{"Size".rjust(7)}  #{"Used".rjust(7)}  #{"Avail".rjust(7)}  #{"Use%".rjust(4)}  Mount#{RESET}"
+        puts "  #{DIM}#{"-" * 85}#{RESET}"
+        disk.filesystems.each do |fs|
+          use_color = fs.use_pct >= 90 ? "\e[31m" : (fs.use_pct >= 75 ? "\e[33m" : "")
+          puts "  #{fs.device.ljust(42)}  #{bytes_human(fs.size_bytes).rjust(7)}  " \
+               "#{bytes_human(fs.used_bytes).rjust(7)}  #{bytes_human(fs.avail_bytes).rjust(7)}  " \
+               "#{use_color}#{fs.use_pct.to_s.rjust(3)}%#{RESET}  #{fs.mount}"
+        end
+        puts
+      end
+
+      # Swap
+      if (total = disk.swap_total_bytes)
+        used = disk.swap_used_bytes || 0
+        free = disk.swap_free_bytes || total
+        pct  = total > 0 ? ((used.to_f / total) * 100).round : 0
+        use_color = pct >= 50 ? "\e[33m" : ""
+        puts "  #{DIM}Swap#{RESET}  #{bytes_human(total)} total, " \
+             "#{use_color}#{bytes_human(used)} used#{RESET}, #{bytes_human(free)} free  (#{pct}%)"
+      end
     end
 
     def self.print_boot_history(hist, from: nil, to: nil)
@@ -178,6 +234,16 @@ module UiAnalyze
 
       m = fw.match(/\.(v[\d.]+)\.\w+\.(\d{6})/)
       m ? "#{m[1]} (#{m[2]})" : fw
+    end
+
+    def self.bytes_human(bytes)
+      return "0 B" if bytes.nil? || bytes == 0
+
+      units = %w[B KB MB GB TB]
+      exp   = (Math.log(bytes) / Math.log(1024)).to_i
+      exp   = units.length - 1 if exp >= units.length
+      val   = bytes.to_f / (1024**exp)
+      val == val.to_i ? "#{val.to_i} #{units[exp]}" : "#{"%.1f" % val} #{units[exp]}"
     end
 
     def self.format_duration(seconds)
