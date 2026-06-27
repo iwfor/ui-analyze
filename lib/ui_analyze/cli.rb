@@ -26,12 +26,15 @@ module UiAnalyze
       dump = Dump.open(path)
       info = DeviceInfo.new(dump)
       disk = DiskInfo.new(dump)
+      health = HealthInfo.new(dump)
       hist = BootHistory.new(dump)
       az   = anon ? Anonymizer.new(device_name: info.name) : nil
 
       print_device_info(info, az)
       puts
       print_disk_info(disk, az)
+      puts
+      print_health(health, az)
       puts
       print_boot_history(hist, from: from, to: to, az: az)
     ensure
@@ -124,6 +127,102 @@ module UiAnalyze
         use_color = pct >= 50 ? "\e[33m" : ""
         puts "  #{DIM}Swap#{RESET}  #{bytes_human(total)} total, " \
              "#{use_color}#{bytes_human(used)} used#{RESET}, #{bytes_human(free)} free  (#{pct}%)"
+      end
+    end
+
+    def self.print_health(health, az = nil)
+      section "System Health"
+
+      # CPU
+      cpu_temp = health.cpu_temperature
+      load     = health.load_averages
+      loading  = health.cpu_loading
+
+      cpu_temp_str = cpu_temp ? temp_str(cpu_temp) : nil
+      load_str     = load ? "#{load[0]} / #{load[1]} / #{load[2]}  (1m / 5m / 15m)" : nil
+      load_color   = load && load[0] >= 4 ? (load[0] >= 8 ? "\e[31m" : "\e[33m") : ""
+
+      row "CPU temp",       cpu_temp_str
+      if load_str
+        puts "  #{DIM}#{"CPU load".ljust(16)}#{RESET}  #{load_color}#{load_str}#{RESET}"
+      end
+      if loading
+        busy = loading["busy"].round(1)
+        usr  = loading["usr"].round(1)
+        sys  = loading["sys"].round(1)
+        puts "  #{DIM}#{"CPU usage".ljust(16)}#{RESET}  #{busy}% busy  (#{usr}% user, #{sys}% sys)"
+      end
+
+      # Thermal sensors & fans
+      unless health.thermal_sensors.empty?
+        puts
+        puts "  #{DIM}#{"Sensor".ljust(8)}  #{"Temp".rjust(7)}  #{"Fan".rjust(6)}  Speed#{RESET}"
+        puts "  #{DIM}#{"-" * 38}#{RESET}"
+        health.thermal_sensors.each do |s|
+          color    = temp_color(s.temperature_c)
+          raw      = temp_str(s.temperature_c)
+          fan_pct  = s.fan_pct       ? "#{s.fan_pct}%" : "—"
+          fan_rpm  = s.fan_speed_rpm ? "#{s.fan_speed_rpm} RPM" : (s.fan_pct ? "passive" : "off")
+          puts "  Sensor #{s.id}  #{color}#{raw.rjust(7)}#{RESET}  #{fan_pct.rjust(6)}  #{fan_rpm}"
+        end
+      end
+
+      # Memory pressure
+      puts
+      total     = health.memory_total_bytes
+      avail     = health.memory_available_bytes
+      committed = health.memory_committed_bytes
+
+      if total
+        avail_pct   = avail ? ((avail.to_f / total) * 100).round : nil
+        commit_pct  = committed ? ((committed.to_f / total) * 100).round : nil
+        avail_color = avail_pct && avail_pct < 15 ? "\e[31m" : (avail_pct && avail_pct < 25 ? "\e[33m" : "")
+        commit_color = commit_pct && commit_pct > 150 ? "\e[31m" : (commit_pct && commit_pct > 100 ? "\e[33m" : "")
+
+        row "RAM total",    bytes_human(total)
+        puts "  #{DIM}#{"RAM available".ljust(16)}#{RESET}  #{avail_color}#{bytes_human(avail)}#{avail_pct ? " (#{avail_pct}%)" : ""}#{RESET}" if avail
+        puts "  #{DIM}#{"RAM committed".ljust(16)}#{RESET}  #{commit_color}#{bytes_human(committed)}#{commit_pct ? " (#{commit_pct}% of total)" : ""}#{RESET}" if committed
+      end
+
+      # OOM pressure events (elevated above table if present)
+      pressure = health.memory_pressure_events
+      if pressure.any?
+        puts
+        puts "  \e[31m⚠ OOM pressure detected:\e[0m"
+        pressure.each do |e|
+          puts "  #{DIM}#{e.name.ljust(36)}#{RESET}  failcnt=#{e.mem_failcnt}  oom_kills=#{e.oom_kills}"
+        end
+      end
+
+      # Top memory consumers
+      consumers = health.top_memory_consumers
+      if consumers.any?
+        puts
+        puts "  #{DIM}#{"Service".ljust(36)}  #{"RSS".rjust(7)}  #{"Swap".rjust(7)}  Total#{RESET}"
+        puts "  #{DIM}#{"-" * 68}#{RESET}"
+        consumers.each do |e|
+          total_bytes = e.mem_bytes + e.swap_bytes
+          puts "  #{e.name.ljust(36)}  #{bytes_human(e.mem_bytes).rjust(7)}  #{bytes_human(e.swap_bytes).rjust(7)}  #{bytes_human(total_bytes)}"
+        end
+      end
+
+      # SFP modules
+      sfps = health.sfp_modules
+      if sfps.any?
+        puts
+        sfps.each do |sfp|
+          link_str = if sfp.link_up == true
+                       "#{"\e[32m"}linked#{RESET} @ #{sfp.speed_mbps}Mb/s"
+                     elsif sfp.link_up == false
+                       "#{DIM}no link#{RESET}"
+                     else
+                       "—"
+                     end
+          serial_val = az ? az.serial(sfp.serial) : sfp.serial
+          puts "  #{BOLD}#{sfp.iface}#{RESET}  #{sfp.vendor} #{sfp.part_number}  #{link_str}"
+          row "  Serial",      serial_val
+          row "  Date",        sfp.date_code
+        end
       end
     end
 
@@ -254,6 +353,16 @@ module UiAnalyze
       exp   = units.length - 1 if exp >= units.length
       val   = bytes.to_f / (1024**exp)
       val == val.to_i ? "#{val.to_i} #{units[exp]}" : "#{"%.1f" % val} #{units[exp]}"
+    end
+
+    def self.temp_str(c)
+      "#{c}°C"
+    end
+
+    def self.temp_color(c)
+      return "\e[31m" if c >= 80
+      return "\e[33m" if c >= 65
+      ""
     end
 
     def self.format_duration(seconds)
