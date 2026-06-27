@@ -22,35 +22,36 @@ module UiAnalyze
     BOLD  = "\e[1m"
     DIM   = "\e[2m"
 
-    def self.run(path, from: nil, to: nil)
+    def self.run(path, from: nil, to: nil, anon: false)
       dump = Dump.open(path)
       info = DeviceInfo.new(dump)
       disk = DiskInfo.new(dump)
       hist = BootHistory.new(dump)
+      az   = anon ? Anonymizer.new : nil
 
-      print_device_info(info)
+      print_device_info(info, az)
       puts
-      print_disk_info(disk)
+      print_disk_info(disk, az)
       puts
-      print_boot_history(hist, from: from, to: to)
+      print_boot_history(hist, from: from, to: to, az: az)
     ensure
       dump&.cleanup
     end
 
-    def self.print_device_info(info)
+    def self.print_device_info(info, az = nil)
       section "Device Information"
 
       row "Name",           info.name
       row "Model",          info.model
-      row "Serial",         info.serial
-      row "MAC Address",    info.mac
-      row "QR ID",          info.qr_id
-      row "UUID",           info.uuid
-      row "Anon ID",        info.anon_id
-      row "Hash ID",        info.hash_id
-      row "BOM",            info.bom
-      row "Board Rev",      info.board_revision
-      row "Hostname",       info.hostname
+      row "Serial",         az ? az.serial(info.serial)          : info.serial
+      row "MAC Address",    az ? az.mac(info.mac)                : info.mac
+      row "QR ID",          az ? az.qr_id(info.qr_id)           : info.qr_id
+      row "UUID",           az ? az.uuid(info.uuid)              : info.uuid
+      row "Anon ID",        az ? az.anon_id(info.anon_id)        : info.anon_id
+      row "Hash ID",        az ? az.hash_id(info.hash_id)        : info.hash_id
+      row "BOM",            az ? az.bom(info.bom)                : info.bom
+      row "Board Rev",      az ? az.board_rev(info.board_revision) : info.board_revision
+      row "Hostname",       az ? az.hostname(info.hostname)      : info.hostname
 
       puts
 
@@ -62,18 +63,19 @@ module UiAnalyze
       puts
 
       section "Firmware"
-      row "Version",        info.firmware_version
+      row "Version",        az ? az.firmware(info.firmware_version) : info.firmware_version
       row "Manufactured",   info.mfg_week
     end
 
-    def self.print_disk_info(disk)
+    def self.print_disk_info(disk, az = nil)
       section "Storage"
 
       # Attached / bay disks with SMART data
       if disk.attached_disks.any?
         disk.attached_disks.each do |d|
-          label = d.slot ? "Bay #{d.slot} Disk" : "Attached Disk"
-          size  = (d.size_bytes&.> 0) ? "  #{bytes_human(d.size_bytes)}" : ""
+          label  = d.slot ? "Bay #{d.slot} Disk" : "Attached Disk"
+          size   = (d.size_bytes&.> 0) ? "  #{bytes_human(d.size_bytes)}" : ""
+          serial = az ? az.serial(d.serial) : d.serial
 
           if d.present == false
             snap = d.snapshot_date ? " (last seen #{d.snapshot_date[0, 10]})" : ""
@@ -81,7 +83,7 @@ module UiAnalyze
           else
             puts "  #{BOLD}#{label}#{RESET}  #{d.model}#{size}"
           end
-          row "  Serial",       d.serial
+          row "  Serial",       serial
           row "  Power-on hrs", d.power_on_hours&.to_s unless d.present == false
           row "  Temperature",  d.temperature_c ? "#{d.temperature_c}°C" : nil unless d.present == false
           row "  Health",       d.life_pct ? "#{d.life_pct}% remaining" : nil
@@ -125,7 +127,7 @@ module UiAnalyze
       end
     end
 
-    def self.print_boot_history(hist, from: nil, to: nil)
+    def self.print_boot_history(hist, from: nil, to: nil, az: nil)
       section "Boot History"
 
       all_boots = hist.boots
@@ -160,9 +162,11 @@ module UiAnalyze
       boots.each do |b|
         ts      = b.timestamp.strftime("%Y-%m-%d %H:%M:%S")
         uptime  = b.uptime_prev ? format_duration(b.uptime_prev) : "—"
-        fw      = b.firmware ? short_fw(b.firmware) : (b.log_empty ? "(empty log)" : "—")
+        fw_raw  = az ? az.firmware(b.firmware) : b.firmware
+        fw      = fw_raw ? short_fw(fw_raw) : (b.log_empty ? "(empty log)" : "—")
         label   = REASON_LABEL[b.reason] || b.reason.to_s
-        label   = "#{label}: #{b.reason_detail}" if b.reason_detail
+        detail  = az ? az.scrub(b.reason_detail) : b.reason_detail
+        label   = "#{label}: #{detail}" if detail
         label   = "#{label} ⚠ empty bootlog" if b.log_empty && b.reason != :firmware_upgrade
 
         reason_str = "#{color(b.reason)}#{label}#{RESET}"
@@ -172,10 +176,10 @@ module UiAnalyze
       end
 
       puts
-      print_reboot_rate_by_firmware(boots)
+      print_reboot_rate_by_firmware(boots, az: az)
     end
 
-    def self.print_reboot_rate_by_firmware(boots)
+    def self.print_reboot_rate_by_firmware(boots, az: nil)
       section "Reboot Rate by Firmware"
 
       # Group improper shutdowns between each firmware upgrade
@@ -212,7 +216,8 @@ module UiAnalyze
         rate_str = g[:count] > 0 ? "1 per #{rate}d" : "none"
         color_str = g[:count] > 0 ? color(:improper) : color(:normal)
 
-        puts "  #{short_fw(g[:fw]).ljust(28)}  #{days.to_s.rjust(10)}d  " \
+        fw_str = short_fw(az ? az.firmware(g[:fw]) : g[:fw])
+        puts "  #{fw_str.ljust(28)}  #{days.to_s.rjust(10)}d  " \
              "#{g[:count].to_s.rjust(7)}  #{color_str}#{rate_str}#{RESET}"
       end
     end

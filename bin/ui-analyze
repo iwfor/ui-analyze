@@ -27,6 +27,9 @@ OptionParser.new do |opts|
     warn "Error: invalid --to date '#{v}' (expected YYYY-MM-DD)"
     exit 1
   end
+  opts.on("--anon", "--anonymize", "Replace serials, UUIDs, MACs, and other identifiers with placeholders") do
+    options[:anon] = true
+  end
   opts.on("-h", "--help", "Show this message") { puts opts; exit }
 end.parse!
 
@@ -42,4 +45,4 @@ unless File.exist?(path)
   exit 1
 end
 
-UiAnalyze::CLI.run(path, from: options[:from], to: options[:to])
+UiAnalyze::CLI.run(path, from: options[:from], to: options[:to], anon: options[:anon])
