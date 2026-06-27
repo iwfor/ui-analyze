@@ -27,7 +27,7 @@ module UiAnalyze
       info = DeviceInfo.new(dump)
       disk = DiskInfo.new(dump)
       hist = BootHistory.new(dump)
-      az   = anon ? Anonymizer.new : nil
+      az   = anon ? Anonymizer.new(device_name: info.name) : nil
 
       print_device_info(info, az)
       puts
