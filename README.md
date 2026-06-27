@@ -10,7 +10,7 @@ analysis.
 ui-analyze [options] <path-to-support-dump>
 ```
 
-The path can be either an extracted support dump directory or a `.tar.gz`
+The path can be either an extracted support dump directory or a `.tar.gz`/`.tgz`
 tarball — the tool handles both.
 
 ### Options
@@ -19,22 +19,27 @@ tarball — the tool handles both.
 |---|---|
 | `--from DATE` | Only show boots on or after `DATE` (YYYY-MM-DD) |
 | `--to DATE` | Only show boots on or before `DATE` (YYYY-MM-DD) |
+| `--anon`, `--anonymize` | Replace serials, MACs, UUIDs, and other identifiers with stable placeholders |
+| `--completions SHELL` | Print a shell completion script (`bash`, `zsh`, or `fish`) |
 | `-h, --help` | Show usage |
 
 ### Examples
 
 ```bash
 # Analyze an extracted support dump
-ruby bin/ui-analyze ~/Downloads/support-DD71-1782218420499
+ui-analyze ~/Downloads/support-DD71-1782218420499
 
 # Analyze a tarball directly
-ruby bin/ui-analyze ~/Downloads/support-DD71-1782218420499.tar.gz
+ui-analyze ~/Downloads/support-DD71-1782218420499.tgz
 
 # Show only June 2026
-ruby bin/ui-analyze --from 2026-06-01 --to 2026-06-30 ~/Downloads/support-DD71-1782218420499
+ui-analyze --from 2026-06-01 --to 2026-06-30 ~/Downloads/support-DD71-1782218420499
 
-# Show everything from a date onward
-ruby bin/ui-analyze --from 2026-03-22 ~/Downloads/support-DD71-1782218420499
+# Anonymize identifiers before sharing output
+ui-analyze --anon ~/Downloads/support-DD71-1782218420499
+
+# Install zsh completions
+ui-analyze --completions zsh > ~/.zfunc/_ui-analyze
 ```
 
 ## Output
@@ -58,10 +63,22 @@ Current firmware version and manufacturing week.
   devices. Partitions at ≥90% use are highlighted red; ≥75% yellow.
 - **Swap** — total, used, and free.
 
+### Hardware Health
+- **CPU** — temperature and current load percentage from `top`
+- **Load averages** — 1/5/15-minute averages
+- **Thermal sensors** — all sensors reported in the storage debug dump, with
+  nominal/max thresholds and current status
+- **Memory** — committed bytes, memory pressure event counts, and top memory
+  consumers by RSS
+- **SFP modules** — vendor, part number, wavelength, TX/RX power, temperature,
+  and voltage for each installed transceiver
+
 ### Boot History
-Chronological table of every boot with timestamp, uptime since the previous
-boot, firmware version, and reboot reason. Empty boot logs (indicating the
-system crashed before the bootloader could write the log) are flagged with ⚠.
+Chronological table of every boot with timestamp, uptime, firmware version, and
+reboot reason. The uptime column shows how long the device ran during that
+session; the most recent boot shows `~current uptime` based on the analyst's
+clock. Empty boot logs (indicating the system crashed before the bootloader
+could write the log) are flagged with ⚠.
 
 Reboot reasons:
 - 🔴 **Improper shutdown** — the system crashed or was reset without a clean shutdown

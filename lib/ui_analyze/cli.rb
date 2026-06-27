@@ -277,32 +277,39 @@ module UiAnalyze
            "#{color(:firmware_upgrade)}#{upgrades} firmware upgrades#{RESET}"
       puts
 
-      # Table header
+      print_boot_table(boots, az: az)
+
+      puts
+      print_reboot_rate_by_firmware(boots)
+    end
+
+    def self.print_boot_table(boots, az: nil)
       puts "  #{DIM}#{"#".rjust(3)}  #{"Timestamp".ljust(20)}  " \
            "#{"Uptime".rjust(10)}  #{"Firmware".ljust(28)}  Reason#{RESET}"
       puts "  #{DIM}#{"-" * 100}#{RESET}"
 
+      last_boot = boots.last
       boots.each do |b|
-        ts      = b.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        uptime  = b.uptime_prev ? format_duration(b.uptime_prev) : "—"
-        fw      = if b.firmware
-                    short_fw(b.firmware)
-                  else
-                    (b.log_empty ? "(empty log)" : "—")
-                  end
-        label   = REASON_LABEL[b.reason] || b.reason.to_s
-        detail  = az ? az.scrub(b.reason_detail) : b.reason_detail
-        label   = "#{label}: #{detail}" if detail
-        label   = "#{label} ⚠ empty bootlog" if b.log_empty && b.reason != :firmware_upgrade
-
-        reason_str = "#{color(b.reason)}#{label}#{RESET}"
+        ts     = b.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        uptime = if b.equal?(last_boot)
+                   "~#{format_duration((Time.now - b.timestamp).to_i)}"
+                 elsif b.uptime_prev
+                   format_duration(b.uptime_prev)
+                 else
+                   "—"
+                 end
+        fw     = if b.firmware then short_fw(b.firmware)
+                 elsif b.log_empty then "(empty log)"
+                 else "—"
+                 end
+        label  = REASON_LABEL[b.reason] || b.reason.to_s
+        detail = az ? az.scrub(b.reason_detail) : b.reason_detail
+        label  = "#{label}: #{detail}" if detail
+        label  = "#{label} ⚠ empty bootlog" if b.log_empty && b.reason != :firmware_upgrade
 
         puts "  #{b.index.to_s.rjust(3)}  #{ts.ljust(20)}  " \
-             "#{uptime.rjust(10)}  #{fw.ljust(28)}  #{reason_str}"
+             "#{uptime.rjust(10)}  #{fw.ljust(28)}  #{color(b.reason)}#{label}#{RESET}"
       end
-
-      puts
-      print_reboot_rate_by_firmware(boots)
     end
 
     def self.print_reboot_rate_by_firmware(boots)
