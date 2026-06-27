@@ -72,7 +72,7 @@ module UiAnalyze
     end
 
     def self.fish
-      <<~'FISH'
+      <<~FISH
         # ui-analyze fish completions
 
         # Disable file completions by default; we add our own below

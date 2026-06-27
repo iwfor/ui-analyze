@@ -70,12 +70,12 @@ module UiAnalyze
 
         device, size_h, used_h, avail_h, use_pct, mount = parts
         rows << Filesystem.new(
-          device:     device,
-          mount:      mount,
+          device:      device,
+          mount:       mount,
           size_bytes:  parse_df_size(size_h),
           used_bytes:  parse_df_size(used_h),
           avail_bytes: parse_df_size(avail_h),
-          use_pct:    use_pct.to_i
+          use_pct:     use_pct.to_i
         )
       end
 
@@ -85,6 +85,7 @@ module UiAnalyze
     def parse_disk_info
       text = @dump.read("system/var/log/disk_info.json")
       return [] unless text
+
       data = JSON.parse(text)
 
       snapshot_date = data["_date_time"]
@@ -95,7 +96,7 @@ module UiAnalyze
 
       disks = []
       data.each do |serial, info|
-        next if serial.start_with?("_")  # skip _date_time and other metadata keys
+        next if serial.start_with?("_") # skip _date_time and other metadata keys
         next unless info.is_a?(Hash)
 
         # A disk is present if ustorage reports at least one occupied slot.
@@ -125,7 +126,7 @@ module UiAnalyze
       # Enrich present disks with size from ustorage debug dump
       slot_sizes = parse_ustorage_disk_sizes
       disks.each do |disk|
-        match = slot_sizes.find { |s| s[:size] > 0 }
+        match = slot_sizes.find { |s| s[:size].positive? }
         if match
           disk.size_bytes = match[:size]
           disk.slot       = match[:slot]
@@ -140,6 +141,7 @@ module UiAnalyze
     def parse_storage_slots
       text = @dump.read("system/storage/ustorage.disk.inspect")
       return [] unless text
+
       JSON.parse(text)
     rescue JSON::ParserError
       []
@@ -148,6 +150,7 @@ module UiAnalyze
     def parse_ustorage_disk_sizes
       text = @dump.read("system/storage/ustorage.debug.dump")
       return [] unless text
+
       data = JSON.parse(text)
       disks = data.dig("storage", "disks") || {}
 
@@ -161,6 +164,7 @@ module UiAnalyze
     def parse_meminfo_field(field)
       text = @dump.read("system/memory/meminfo")
       return nil unless text
+
       line = text.lines.find { |l| l.start_with?("#{field}:") }
       return nil unless line
 

@@ -1,0 +1,53 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.4
+  Exclude:
+    - "vendor/**/*"
+
+# We use double-quoted strings throughout — not worth changing
+Style/StringLiterals:
+  Enabled: false
+
+Style/StringLiteralsInInterpolation:
+  Enabled: false
+
+# Top-level documentation on internal CLI/parser modules isn't useful
+Style/Documentation:
+  Enabled: false
+
+# Hash value alignment — we intentionally align values for readability
+Layout/HashAlignment:
+  EnforcedColonStyle: table
+  EnforcedHashRocketStyle: table
+
+# CLI and parser methods are naturally longer than 10 lines
+Metrics/MethodLength:
+  Max: 45
+
+Metrics/ModuleLength:
+  Max: 350
+
+Metrics/ClassLength:
+  Max: 150
+
+# classify_reboot_line branches on several log line patterns — complexity is inherent
+Metrics/CyclomaticComplexity:
+  Max: 25
+
+Metrics/PerceivedComplexity:
+  Max: 25
+
+Metrics/AbcSize:
+  Max: 110
+
+# OptionParser block in bin/ is naturally 25+ lines
+Metrics/BlockLength:
+  Max: 35
+
+# Single-letter params (v, n, az) are idiomatic in small façade/helper methods
+Naming/MethodParameterName:
+  Enabled: false
+
+# Table-formatting puts strings run long by nature
+Layout/LineLength:
+  Max: 160

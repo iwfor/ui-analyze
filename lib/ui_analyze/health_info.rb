@@ -51,14 +51,14 @@ module UiAnalyze
 
     # Services with mem_failcnt > 0 or oom_kills > 0
     def memory_pressure_events
-      cgroup_services.select { |e| e.mem_failcnt > 0 || e.oom_kills > 0 }
+      cgroup_services.select { |e| e.mem_failcnt.positive? || e.oom_kills.positive? }
     end
 
     # Top N memory consumers (services only, not slices)
     def top_memory_consumers(n = 10)
       cgroup_services
         .select { |e| e.name.end_with?(".service") || !e.name.include?(".") }
-        .reject { |e| e.mem_bytes == 0 && e.swap_bytes == 0 }
+        .reject { |e| e.mem_bytes.zero? && e.swap_bytes.zero? }
         .first(n)
     end
 
@@ -94,6 +94,7 @@ module UiAnalyze
     def parse_load_averages
       text = @dump.read("system/process/top")
       return nil unless text
+
       m = text.match(/load average:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/)
       m ? [m[1].to_f, m[2].to_f, m[3].to_f] : nil
     end
@@ -104,10 +105,10 @@ module UiAnalyze
         fan_config = s["fan_config"].to_i
         fan_speed  = s["fan_speed"].to_i
         ThermalSensor.new(
-          id:             s["id"],
-          temperature_c:  s["temperature"],
-          fan_speed_rpm:  fan_speed > 0 ? fan_speed : nil,
-          fan_pct:        fan_config > 0 ? fan_config : nil
+          id:            s["id"],
+          temperature_c: s["temperature"],
+          fan_speed_rpm: fan_speed.positive? ? fan_speed : nil,
+          fan_pct:       fan_config.positive? ? fan_config : nil
         )
       end.sort_by(&:id)
     end
@@ -121,12 +122,13 @@ module UiAnalyze
         # "unifi.service mem: 457388032, swap: 22323200, mem_failcnt: 0, oom_kill: 0"
         m = line.match(/^(.+?)\s+mem:\s*(\d+),\s*swap:\s*(\d+),\s*mem_failcnt:\s*(\d+),\s*oom_kill:\s*(\d+)/)
         next unless m
+
         entries << CgroupEntry.new(
-          name:         m[1].strip,
-          mem_bytes:    m[2].to_i,
-          swap_bytes:   m[3].to_i,
-          mem_failcnt:  m[4].to_i,
-          oom_kills:    m[5].to_i
+          name:        m[1].strip,
+          mem_bytes:   m[2].to_i,
+          swap_bytes:  m[3].to_i,
+          mem_failcnt: m[4].to_i,
+          oom_kills:   m[5].to_i
         )
       end
 
@@ -148,7 +150,7 @@ module UiAnalyze
           vendor:      info["vendor-name"]&.strip,
           part_number: info["vendor-pn"]&.strip,
           serial:      info["vendor-sn"]&.strip,
-          date_code:   info["br-nominal"] ? nil : nil, # date from ethtool text instead
+          date_code:   nil, # populated later from sfp.txt
           speed_mbps:  link["speed_mbps"],
           link_up:     link["detected"]
         )
@@ -163,7 +165,9 @@ module UiAnalyze
         elsif (m = line.match(/Date\s+(\d{6})/))
           mod = modules.find { |s| s.iface == current_iface }
           if mod && m[1].length == 6
-            y, mo, d = "20#{m[1][0, 2]}", m[1][2, 2], m[1][4, 2]
+            y = "20#{m[1][0, 2]}"
+            mo = m[1][2, 2]
+            d = m[1][4, 2]
             mod.date_code = "#{y}-#{mo}-#{d}"
           end
         end
@@ -175,8 +179,10 @@ module UiAnalyze
     def parse_meminfo_field(field)
       text = @dump.read("system/memory/meminfo")
       return nil unless text
+
       line = text.lines.find { |l| l.start_with?("#{field}:") }
       return nil unless line
+
       line.split[1].to_i * 1024
     end
   end

@@ -31,7 +31,7 @@ module UiAnalyze
 
     def glob(pattern)
       Dir.glob(File.join(@root, pattern)).map do |f|
-        f.delete_prefix(@root + "/")
+        f.delete_prefix("#{@root}/")
       end
     end
 
@@ -63,7 +63,7 @@ module UiAnalyze
 
     def extract_tarball
       @tmpdir = Dir.mktmpdir("ui-analyze-")
-      out, err, status = Open3.capture3("tar", "-xzf", @path, "-C", @tmpdir)
+      _, err, status = Open3.capture3("tar", "-xzf", @path, "-C", @tmpdir)
       unless status.success?
         FileUtils.rm_rf(@tmpdir)
         raise "Failed to extract #{@path}: #{err}"

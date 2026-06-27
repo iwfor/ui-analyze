@@ -27,22 +27,24 @@ module UiAnalyze
 
     def hostname(_v)
       return "<HOST>" unless @device_name
+
       "my-#{@device_name.downcase.gsub(/\s+/, "-")}"
     end
 
     # Replace MAC addresses, UUIDs, and long uppercase serials in an arbitrary string.
     def scrub(v)
       return v unless v
-      v = v.gsub(MAC_RE)    { redact($&, :mac) }
-      v = v.gsub(UUID_RE)   { redact($&, "UUID") }
-      v = v.gsub(SERIAL_RE) { redact($&, :serial) }
-      v
+
+      v = v.gsub(MAC_RE)    { redact(::Regexp.last_match(0), :mac) }
+      v = v.gsub(UUID_RE)   { redact(::Regexp.last_match(0), "UUID") }
+      v.gsub(SERIAL_RE) { redact(::Regexp.last_match(0), :serial) }
     end
 
     private
 
     def redact(v, prefix)
       return v unless v
+
       @map[v] ||= begin
         @counters[prefix] += 1
         n = @counters[prefix]

@@ -11,7 +11,7 @@ module UiAnalyze
       :slug,         # raw bootlog filename slug (e.g. "boot-20260622111707-etio")
       :firmware,     # "v5.1.19..." string or nil
       :reason,       # :firmware_upgrade | :improper | :normal | :reset | :unknown
-      :reason_detail,# raw reboot-time.log line detail (upgrade from/to, duration)
+      :reason_detail, # raw reboot-time.log line detail (upgrade from/to, duration)
       :log_empty,    # true if bootlog file had no content
       :uptime_prev,  # seconds since previous boot (nil for first)
       keyword_init: true
@@ -44,7 +44,7 @@ module UiAnalyze
       boot_entries  = parse_bootlogs
       reboot_events = parse_reboot_time_log
 
-      boots = boot_entries.each_with_index.map do |entry, idx|
+      boot_entries.each_with_index.map do |entry, idx|
         ts = entry[:timestamp]
 
         # Find the matching reboot-time.log event — the entry recorded just
@@ -53,7 +53,7 @@ module UiAnalyze
           ev[:timestamp] > ts && ev[:timestamp] < ts + 600
         end
 
-        prev_ts = idx > 0 ? boot_entries[idx - 1][:timestamp] : nil
+        prev_ts = idx.positive? ? boot_entries[idx - 1][:timestamp] : nil
         uptime_prev = prev_ts ? (ts - prev_ts).to_i : nil
 
         Boot.new(
@@ -67,8 +67,6 @@ module UiAnalyze
           uptime_prev:   uptime_prev
         )
       end
-
-      boots
     end
 
     # Parse every file in system/bootlog/ (excluding boot.log summary)
@@ -115,11 +113,8 @@ module UiAnalyze
     #   "2025-06-18 16:24:37,947 ..."
     #   "2026-03-22T03:43:33-0600 ..."
     def parse_log_timestamp(line)
-      if (m = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/))
-        Time.parse(m[1])
-      elsif (m = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4})/))
-        Time.parse(m[1])
-      end
+      m = line.match(/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}[+-]?\d*)/)
+      Time.parse(m[1]) if m
     rescue ArgumentError
       nil
     end

@@ -30,11 +30,15 @@ OptionParser.new do |opts|
   opts.on("--anon", "--anonymize", "Replace serials, UUIDs, MACs, and other identifiers with placeholders") do
     options[:anon] = true
   end
-  opts.on("--completions SHELL", UiAnalyze::Completions::SHELLS, "Print shell completion script (bash, zsh, fish)") do |v|
+  opts.on("--completions SHELL", UiAnalyze::Completions::SHELLS,
+          "Print shell completion script (bash, zsh, fish)") do |v|
     puts UiAnalyze::Completions.generate(v)
     exit
   end
-  opts.on("-h", "--help", "Show this message") { puts opts; exit }
+  opts.on("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
 end.parse!
 
 path = ARGV[0]

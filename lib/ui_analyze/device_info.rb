@@ -73,7 +73,7 @@ module UiAnalyze
       bytes = ram_bytes
       return "Unknown" unless bytes
 
-      gb = bytes / (1024.0 ** 3)
+      gb = bytes / (1024.0**3)
       "#{gb.ceil} GB"
     end
 
@@ -86,7 +86,7 @@ module UiAnalyze
       bytes = flash_bytes
       return "Unknown" unless bytes
 
-      mb = bytes / (1024.0 ** 2)
+      mb = bytes / (1024.0**2)
       "#{mb} MB"
     end
 
@@ -104,7 +104,7 @@ module UiAnalyze
       # "2025-09-13T18:35:32-06:00 Zombie-Road kernel: ..."
       text = dump.read("system/var/log/kern.log") || ""
       # Use the last matching line — early boot lines may show default hostname
-      line = text.lines.select { |l| l.match?(/\d{4}-\d{2}-\d{2}T.*kernel:/) }.last
+      line = text.lines.grep(/\d{4}-\d{2}-\d{2}T.*kernel:/).last
       line&.match(/\S+\s+(\S+)\s+kernel:/)&.[](1)
     end
 
