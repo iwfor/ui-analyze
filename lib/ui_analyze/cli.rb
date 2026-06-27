@@ -74,13 +74,19 @@ module UiAnalyze
         disk.attached_disks.each do |d|
           label = d.slot ? "Bay #{d.slot} Disk" : "Attached Disk"
           size  = (d.size_bytes&.> 0) ? "  #{bytes_human(d.size_bytes)}" : ""
-          puts "  #{BOLD}#{label}#{RESET}  #{d.model}#{size}"
+
+          if d.present == false
+            snap = d.snapshot_date ? " (last seen #{d.snapshot_date[0, 10]})" : ""
+            puts "  #{BOLD}#{label}#{RESET}  #{DIM}#{d.model}#{size}#{RESET}  #{"\e[33m"}⚠ not present#{snap}#{RESET}"
+          else
+            puts "  #{BOLD}#{label}#{RESET}  #{d.model}#{size}"
+          end
           row "  Serial",       d.serial
-          row "  Power-on hrs", d.power_on_hours&.to_s
-          row "  Temperature",  d.temperature_c ? "#{d.temperature_c}°C" : nil
+          row "  Power-on hrs", d.power_on_hours&.to_s unless d.present == false
+          row "  Temperature",  d.temperature_c ? "#{d.temperature_c}°C" : nil unless d.present == false
           row "  Health",       d.life_pct ? "#{d.life_pct}% remaining" : nil
-          row "  Bad sectors",  d.bad_sectors&.to_s
-          row "  Error log",    d.error_log_count ? "#{d.error_log_count} entries" : nil
+          row "  Bad sectors",  d.bad_sectors&.to_s unless d.present == false
+          row "  Error log",    d.error_log_count ? "#{d.error_log_count} entries" : nil unless d.present == false
           puts
         end
       else

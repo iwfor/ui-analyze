@@ -14,6 +14,8 @@ module UiAnalyze
       :serial, :model, :size_bytes, :slot,
       :power_on_hours, :temperature_c, :life_pct,
       :bad_sectors, :error_log_count,
+      :present,       # false = slot is currently empty; disk_info.json is historical
+      :snapshot_date, # date disk_info.json was captured
       keyword_init: true
     )
 
@@ -84,26 +86,43 @@ module UiAnalyze
       text = @dump.read("system/var/log/disk_info.json")
       return [] unless text
       data = JSON.parse(text)
-      disks = []
 
+      snapshot_date = data["_date_time"]
+
+      # Occupied slots according to the current ustorage state
+      occupied_slots = storage_slots.reject { |s| s["state"] == "nodisk" || s["status"] == "nodisk" }
+      occupied_serials = occupied_slots.map { |s| s["serial"] }.compact
+
+      disks = []
       data.each do |serial, info|
-        next if serial.start_with?("_")  # skip _date_time etc.
+        next if serial.start_with?("_")  # skip _date_time and other metadata keys
         next unless info.is_a?(Hash)
+
+        # A disk is present if ustorage reports at least one occupied slot.
+        # When ustorage has no serial data we fall back to checking whether
+        # any slot is occupied at all.
+        present = if occupied_serials.any?
+                    occupied_serials.include?(serial)
+                  else
+                    occupied_slots.any?
+                  end
 
         disks << AttachedDisk.new(
           serial:          serial,
           model:           info["model_name"],
-          size_bytes:      nil,  # disk_info.json doesn't include size; comes from ustorage
+          size_bytes:      nil,
           slot:            nil,
           power_on_hours:  info["poweronhrs"],
           temperature_c:   info["temperature"],
           life_pct:        info["life_span"],
           bad_sectors:     info["bad_sector"],
-          error_log_count: info["error_log_count"]
+          error_log_count: info["error_log_count"],
+          present:         present,
+          snapshot_date:   snapshot_date
         )
       end
 
-      # Enrich with size from ustorage debug dump
+      # Enrich present disks with size from ustorage debug dump
       slot_sizes = parse_ustorage_disk_sizes
       disks.each do |disk|
         match = slot_sizes.find { |s| s[:size] > 0 }
