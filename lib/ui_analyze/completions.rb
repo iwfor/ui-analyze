@@ -40,7 +40,7 @@ module UiAnalyze
 
           # Default: complete paths (directories and .tar.gz files)
           local IFS=$'\n'
-          COMPREPLY=($(compgen -f -- "$cur" | grep -E '(/$|\.tar\.gz$)'))
+          COMPREPLY=($(compgen -f -- "$cur" | grep -E '(/$|\.tar\.gz$|\.tgz$)'))
           compopt -o nospace 2>/dev/null
         }
         complete -F _ui_analyze ui-analyze
@@ -64,7 +64,7 @@ module UiAnalyze
 
           _arguments -s \
             $opts \
-            '*:support dump (directory or .tar.gz):_files -g "*(/) *.tar.gz"'
+            '*:support dump (directory or .tar.gz/.tgz):_files -g "*(/) *.tar.gz *.tgz"'
         }
 
         _ui_analyze "$@"
@@ -86,7 +86,9 @@ module UiAnalyze
         complete -c ui-analyze -l help        -d 'Show help'
 
         # Re-enable path completions for the dump argument (dirs and .tar.gz)
-        complete -c ui-analyze -F -a '(__fish_complete_path)'
+        complete -c ui-analyze -a "(__fish_complete_directories)"
+        complete -c ui-analyze -a "(__fish_complete_suffix .tar.gz)"
+        complete -c ui-analyze -a "(__fish_complete_suffix .tgz)"
       FISH
     end
   end
