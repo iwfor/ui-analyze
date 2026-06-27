@@ -50,7 +50,7 @@ module UiAnalyze
       row "Anon ID",        az ? az.anon_id(info.anon_id)        : info.anon_id
       row "Hash ID",        az ? az.hash_id(info.hash_id)        : info.hash_id
       row "BOM",            az ? az.bom(info.bom)                : info.bom
-      row "Board Rev",      az ? az.board_rev(info.board_revision) : info.board_revision
+      row "Board Rev",      info.board_revision
       row "Hostname",       az ? az.hostname(info.hostname)      : info.hostname
 
       puts
@@ -63,7 +63,7 @@ module UiAnalyze
       puts
 
       section "Firmware"
-      row "Version",        az ? az.firmware(info.firmware_version) : info.firmware_version
+      row "Version",        info.firmware_version
       row "Manufactured",   info.mfg_week
     end
 
@@ -162,8 +162,7 @@ module UiAnalyze
       boots.each do |b|
         ts      = b.timestamp.strftime("%Y-%m-%d %H:%M:%S")
         uptime  = b.uptime_prev ? format_duration(b.uptime_prev) : "—"
-        fw_raw  = az ? az.firmware(b.firmware) : b.firmware
-        fw      = fw_raw ? short_fw(fw_raw) : (b.log_empty ? "(empty log)" : "—")
+        fw      = b.firmware ? short_fw(b.firmware) : (b.log_empty ? "(empty log)" : "—")
         label   = REASON_LABEL[b.reason] || b.reason.to_s
         detail  = az ? az.scrub(b.reason_detail) : b.reason_detail
         label   = "#{label}: #{detail}" if detail
@@ -216,7 +215,7 @@ module UiAnalyze
         rate_str = g[:count] > 0 ? "1 per #{rate}d" : "none"
         color_str = g[:count] > 0 ? color(:improper) : color(:normal)
 
-        fw_str = short_fw(az ? az.firmware(g[:fw]) : g[:fw])
+        fw_str = short_fw(g[:fw])
         puts "  #{fw_str.ljust(28)}  #{days.to_s.rjust(10)}d  " \
              "#{g[:count].to_s.rjust(7)}  #{color_str}#{rate_str}#{RESET}"
       end
